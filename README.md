@@ -39,6 +39,16 @@ python3 scripts/workflow_check.py --workflow all
 
 `GET /events?after=0`返回至多200条严格后继事件。序号是持久顺序，时间戳仅用于解释。`GET /state`返回当前一致快照，适合受信任客户端。
 
+## 错误语义
+
+错误响应统一为 `{"error": 代码, "message": 说明}`，按成因分三类：
+
+- **输入不可加工**（调用方可修正）：`invalid` 400、`not_found` 404、`conflict` 409、`capacity` 429。消息说明可修正的原因，如非法区间、过期修订、幂等键冲突、不可探测的媒体字节。
+- **运行环境失败**：`internal` 500，消息固定为 `operation failed; consult the server event log`。媒体进程、文件系统或资源边界故障；不修改输入的重试可能在环境恢复后成功。服务端日志以 `kind=environment` 和 `stage` 记录失败类别与加工阶段。
+- **持久化不确定性**：`persistence_uncertain` 500。变更可能已提交但耐久性未证实（如状态替换后目录同步失败），服务随后拒绝写入直到恢复核对。不要按"从未提交"直接重试，先通过 `GET /state` 或 `GET /events` 核对实际状态。
+
+渲染在后台执行，加工失败不映射到 HTTP 状态码，而是记录在任务 `attempts[].detail` 与 `render.failed` 事件中。详情带阶段前缀：素材接收侧（`receive`、`probe`）与渲染加工侧（`staging`、`source-check`、`encode`、`inspect`、`promote`）及状态提交（`commit`）保持可解释差别，不会压平成统一字符串。
+
 ## 分析入口
 
 `POST /sources/{id}/loudness`测量源LUFS、真峰值和动态范围，静音或不可测结果使用null并指示silent。`GET /sources/{id}/visual?mode=storyboard`生成四格图；`mode=waveform`生成640×120单声道概览。它们是有成本的同步分析，请求受独立超时约束；波形合并声道可能隐藏反相内容，故事板不等于逐帧审片。

@@ -15,7 +15,7 @@ func Visual(ctx context.Context, binary, path, mode string, m domain.Media) ([]b
 	defer cancel()
 	dir, err := os.MkdirTemp("", "cadence-visual-*")
 	if err != nil {
-		return nil, err
+		return nil, domain.Env("visual", "inspection workspace failed", err)
 	}
 	defer os.RemoveAll(dir)
 	output := filepath.Join(dir, "inspection.png")
@@ -37,14 +37,14 @@ func Visual(ctx context.Context, binary, path, mode string, m domain.Media) ([]b
 	}
 	args = append(args, "-frames:v", "1", "-threads", "1", output)
 	if _, err = Run(ctx, binary, args, 65536); err != nil {
-		return nil, err
+		return nil, domain.Env("visual", "inspection image render failed", err)
 	}
 	data, err := os.ReadFile(output)
 	if err != nil {
-		return nil, err
+		return nil, domain.Env("visual", "inspection image unreadable", err)
 	}
 	if len(data) > 2<<20 {
-		return nil, fmt.Errorf("inspection image exceeded bound")
+		return nil, domain.Env("visual", "inspection image exceeded bound", nil)
 	}
 	return data, nil
 }

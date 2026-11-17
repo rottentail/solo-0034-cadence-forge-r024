@@ -17,8 +17,12 @@ func write(w http.ResponseWriter, status int, value any) {
 }
 func failure(w http.ResponseWriter, err error) {
 	status, code, message := domain.Classify(err)
-	if status == 500 {
-		slog.Error("request failed", "error", err)
+	if status >= 500 {
+		if f := domain.FailureOf(err); f != nil {
+			slog.Error("request failed", "kind", string(f.Kind), "stage", f.Stage, "error", err)
+		} else {
+			slog.Error("request failed", "error", err)
+		}
 	}
 	write(w, status, map[string]string{"error": code, "message": message})
 }

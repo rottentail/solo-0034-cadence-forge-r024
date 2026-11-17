@@ -1,11 +1,12 @@
 package service
 
 import (
+	"cadenceforge/internal/blob"
 	"cadenceforge/internal/domain"
 	"cadenceforge/internal/inspect"
 	"cadenceforge/internal/media"
 	"context"
-	"fmt"
+	"errors"
 	"io"
 	"strings"
 	"time"
@@ -17,12 +18,20 @@ func (s *Service) Ingest(ctx context.Context, name string, body io.Reader) (doma
 	}
 	digest, n, err := s.Blobs.Receive(body, s.Config.UploadLimit)
 	if err != nil {
-		return domain.Source{}, domain.Invalid("upload rejected: %s", err)
+		var size *blob.SizeError
+		if errors.As(err, &size) {
+			return domain.Source{}, domain.Invalid("upload rejected: %s", err)
+		}
+		return domain.Source{}, err
 	}
 	path, _ := s.Blobs.Object(digest)
 	metadata, err := s.Probe.Probe(ctx, path)
 	if err != nil {
-		return domain.Source{}, domain.Invalid("unusable media: %s", err)
+		var rejected *media.Rejection
+		if errors.As(err, &rejected) {
+			return domain.Source{}, domain.Invalid("unusable media: %s", rejected.Reason)
+		}
+		return domain.Source{}, err
 	}
 	s.mutation.Lock()
 	defer s.mutation.Unlock()
@@ -86,10 +95,10 @@ func (s *Service) Loudness(ctx context.Context, id string) (media.Loudness, erro
 	path, _ := s.Blobs.Object(source.Digest)
 	actual, n, err := inspect.Digest(path)
 	if err != nil {
-		return media.Loudness{}, err
+		return media.Loudness{}, domain.Env("verify", "source digest read failed", err)
 	}
 	if actual != source.Digest || n != source.Bytes {
-		return media.Loudness{}, fmt.Errorf("source digest mismatch")
+		return media.Loudness{}, domain.Env("verify", "source digest mismatch", nil)
 	}
 	return media.Measure(ctx, s.Config.FFmpeg, path)
 }

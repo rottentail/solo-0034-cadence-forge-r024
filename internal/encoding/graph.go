@@ -16,7 +16,7 @@ func Arguments(render domain.Render, paths map[string]string, output string) ([]
 	for i, p := range render.Plan.Placements {
 		path, ok := paths[p.SourceID]
 		if !ok {
-			return nil, fmt.Errorf("source object missing")
+			return nil, domain.Env("encode", "source object missing", nil)
 		}
 		args = append(args, "-protocol_whitelist", "file,pipe", "-format_whitelist", media.Formats, "-i", path)
 		audio := fmt.Sprintf("[%d:a:0]atrim=start=%s:end=%s,asetpts=PTS-STARTPTS,aresample=%d,aformat=sample_fmts=fltp:channel_layouts=stereo,volume=%.3fdB[a%d]", i, seconds(p.SourceInMS), seconds(p.SourceOutMS), r.SampleRate, p.GainDB, i)
@@ -32,7 +32,7 @@ func Arguments(render domain.Render, paths map[string]string, output string) ([]
 		}
 	}
 	if len(joins) == 0 {
-		return nil, fmt.Errorf("empty render")
+		return nil, domain.Env("encode", "empty render", nil)
 	}
 	if r.Format == "mp4" {
 		filters = append(filters, strings.Join(joins, "")+fmt.Sprintf("concat=n=%d:v=1:a=1[vout][acat]", len(joins)))

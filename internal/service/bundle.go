@@ -6,7 +6,6 @@ import (
 	"cadenceforge/internal/inspect"
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -37,14 +36,14 @@ func (s *Service) Verify(ctx context.Context, id string) (domain.Inspection, err
 		return in, err
 	}
 	if in.Digest != r.Artifact.Inspection.Digest || in.Bytes != r.Artifact.Inspection.Bytes {
-		return in, fmt.Errorf("committed artifact integrity failed")
+		return in, domain.Env("verify", "committed artifact integrity failed", nil)
 	}
 	captions, err := os.ReadFile(filepath.Join(dir, r.Artifact.CaptionFile))
 	if err != nil {
-		return in, err
+		return in, domain.Env("verify", "committed captions unreadable", err)
 	}
 	if string(captions) != r.Plan.VTT {
-		return in, fmt.Errorf("caption integrity failed")
+		return in, domain.Env("verify", "caption integrity failed", nil)
 	}
 	return in, nil
 }
@@ -61,7 +60,7 @@ func (s *Service) Bundle(ctx context.Context, id string, dest io.Writer) error {
 		f, err := os.Open(filepath.Join(dir, name))
 		if err != nil {
 			z.Close()
-			return err
+			return domain.Env("bundle", "artifact open failed", err)
 		}
 		w, err := z.Create(name)
 		if err == nil {
@@ -70,22 +69,25 @@ func (s *Service) Bundle(ctx context.Context, id string, dest io.Writer) error {
 		f.Close()
 		if err != nil {
 			z.Close()
-			return err
+			return domain.Env("bundle", "artifact packing failed", err)
 		}
 	}
 	manifest, err := json.MarshalIndent(r, "", "  ")
 	if err != nil {
 		z.Close()
-		return err
+		return domain.Env("bundle", "manifest encoding failed", err)
 	}
 	w, err := z.Create("composition.json")
 	if err != nil {
 		z.Close()
-		return err
+		return domain.Env("bundle", "manifest packing failed", err)
 	}
 	if _, err = w.Write(manifest); err != nil {
 		z.Close()
-		return err
+		return domain.Env("bundle", "manifest packing failed", err)
 	}
-	return z.Close()
+	if err = z.Close(); err != nil {
+		return domain.Env("bundle", "bundle finalize failed", err)
+	}
+	return nil
 }

@@ -5,7 +5,6 @@ import (
 	"cadenceforge/internal/inspect"
 	"cadenceforge/internal/media"
 	"context"
-	"fmt"
 )
 
 func (s *Service) Visual(ctx context.Context, id, mode string) ([]byte, error) {
@@ -23,10 +22,10 @@ func (s *Service) Visual(ctx context.Context, id, mode string) ([]byte, error) {
 	}
 	digest, n, err := inspect.Digest(path)
 	if err != nil {
-		return nil, err
+		return nil, domain.Env("verify", "source digest read failed", err)
 	}
 	if digest != source.Digest || n != source.Bytes {
-		return nil, fmt.Errorf("source content integrity failed")
+		return nil, domain.Env("verify", "source content integrity failed", nil)
 	}
 	return media.Visual(ctx, s.Config.FFmpeg, path, mode, source.Media)
 }

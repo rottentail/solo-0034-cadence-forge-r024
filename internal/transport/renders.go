@@ -80,7 +80,7 @@ func (a API) artifact(w http.ResponseWriter, r *http.Request) {
 func (a API) bundle(w http.ResponseWriter, r *http.Request) {
 	f, err := os.CreateTemp("", "cadence-bundle-*.zip")
 	if err != nil {
-		failure(w, err)
+		failure(w, domain.Env("bundle", "bundle workspace failed", err))
 		return
 	}
 	defer os.Remove(f.Name())
@@ -90,12 +90,12 @@ func (a API) bundle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, err = f.Seek(0, 0); err != nil {
-		failure(w, err)
+		failure(w, domain.Env("bundle", "bundle rewind failed", err))
 		return
 	}
 	info, err := f.Stat()
 	if err != nil {
-		failure(w, err)
+		failure(w, domain.Env("bundle", "bundle stat failed", err))
 		return
 	}
 	w.Header().Set("Content-Type", "application/zip")

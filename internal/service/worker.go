@@ -109,11 +109,11 @@ func (s *Service) execute(ctx context.Context, r domain.Render) {
 		}
 		digest, n, e := inspect.Digest(path)
 		if e != nil {
-			s.complete(r, nil, e)
+			s.complete(r, nil, domain.Env("source-check", "source digest read failed", e))
 			return
 		}
 		if digest != source.Digest || n != source.Bytes {
-			s.complete(r, nil, fmt.Errorf("source content integrity failed"))
+			s.complete(r, nil, domain.Env("source-check", "source content integrity failed", nil))
 			return
 		}
 	}

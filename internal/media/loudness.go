@@ -1,9 +1,9 @@
 package media
 
 import (
+	"cadenceforge/internal/domain"
 	"context"
 	"encoding/json"
-	"fmt"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -32,13 +32,13 @@ func Measure(ctx context.Context, binary, path string) (Loudness, error) {
 	log.Limit = 32768
 	cmd.Stderr = &log
 	if err := cmd.Run(); err != nil {
-		return Loudness{}, fmt.Errorf("loudness scan: %w: %s", err, log.String())
+		return Loudness{}, domain.Env("measure", "loudness scan failed", &ProcessError{Err: err, Stderr: log.String(), Ctx: ctx.Err()})
 	}
 	text := log.String()
 	start := strings.LastIndex(text, "{")
 	end := strings.LastIndex(text, "}")
 	if start < 0 || end < start {
-		return Loudness{}, fmt.Errorf("loudness output missing")
+		return Loudness{}, domain.Env("measure", "loudness output missing", nil)
 	}
 	var raw struct {
 		I   string `json:"input_i"`
@@ -46,7 +46,7 @@ func Measure(ctx context.Context, binary, path string) (Loudness, error) {
 		LRA string `json:"input_lra"`
 	}
 	if err := json.Unmarshal([]byte(text[start:end+1]), &raw); err != nil {
-		return Loudness{}, err
+		return Loudness{}, domain.Env("measure", "loudness output is not valid JSON", err)
 	}
 	l := Loudness{IntegratedLUFS: finite(raw.I), TruePeakDBFS: finite(raw.TP)}
 	l.Silent = l.IntegratedLUFS == nil

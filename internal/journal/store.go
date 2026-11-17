@@ -59,7 +59,11 @@ func clone(s domain.State) (domain.State, error) {
 func (s *Store) Snapshot() (domain.State, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return clone(s.state)
+	st, err := clone(s.state)
+	if err != nil {
+		return domain.State{}, domain.Env("snapshot", "state snapshot failed", err)
+	}
+	return st, nil
 }
 func (s *Store) Update(fn func(*domain.State) error) error {
 	s.mu.Lock()
@@ -69,7 +73,7 @@ func (s *Store) Update(fn func(*domain.State) error) error {
 	}
 	next, err := clone(s.state)
 	if err != nil {
-		return err
+		return domain.Env("snapshot", "state snapshot failed", err)
 	}
 	if err = fn(&next); err != nil {
 		return err
@@ -78,42 +82,42 @@ func (s *Store) Update(fn func(*domain.State) error) error {
 		return nil
 	}
 	if err = domain.ValidateState(next); err != nil {
-		return fmt.Errorf("state invariant: %w", err)
+		return domain.Env("commit", "state invariant violated", err)
 	}
 	b, err := json.MarshalIndent(next, "", "  ")
 	if err != nil {
-		return err
+		return domain.Env("commit", "state encoding failed", err)
 	}
 	f, err := os.CreateTemp(s.root, ".state-*")
 	if err != nil {
-		return err
+		return domain.Env("commit", "state staging failed", err)
 	}
 	name := f.Name()
 	defer os.Remove(name)
 	if _, err = f.Write(b); err != nil {
 		f.Close()
-		return err
+		return domain.Env("commit", "state write failed", err)
 	}
 	if err = f.Sync(); err != nil {
 		f.Close()
-		return err
+		return domain.Env("commit", "state sync failed", err)
 	}
 	if err = f.Close(); err != nil {
-		return err
+		return domain.Env("commit", "state close failed", err)
 	}
 	if err = os.Rename(name, filepath.Join(s.root, "state.json")); err != nil {
-		return err
+		return domain.Env("commit", "state replace failed", err)
 	}
 	s.state = next
 	d, err := os.Open(s.root)
 	if err != nil {
-		s.poisoned = err
-		return err
+		s.poisoned = domain.Uncertain("commit", "state committed but durability uncertain; restart required", err)
+		return s.poisoned
 	}
 	err = d.Sync()
 	d.Close()
 	if err != nil {
-		s.poisoned = fmt.Errorf("state committed but durability uncertain; restart required: %w", err)
+		s.poisoned = domain.Uncertain("commit", "state committed but durability uncertain; restart required", err)
 		return s.poisoned
 	}
 	return nil

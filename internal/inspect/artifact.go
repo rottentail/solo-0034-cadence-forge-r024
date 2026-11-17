@@ -28,7 +28,7 @@ func Digest(path string) (string, int64, error) {
 func Artifact(ctx context.Context, prober media.Prober, path string, r domain.Render) (domain.Inspection, error) {
 	m, err := prober.Probe(ctx, path)
 	if err != nil {
-		return domain.Inspection{}, err
+		return domain.Inspection{}, domain.Env("inspect", "artifact probe failed", err)
 	}
 	delta := m.DurationMS - r.Plan.DurationMS
 	tolerance := int64(100)
@@ -36,17 +36,17 @@ func Artifact(ctx context.Context, prober media.Prober, path string, r domain.Re
 		tolerance = max(tolerance, int64(2000/r.Recipe.FPS))
 	}
 	if math.Abs(float64(delta)) > float64(tolerance) {
-		return domain.Inspection{}, fmt.Errorf("output duration delta %dms exceeds %dms", delta, tolerance)
+		return domain.Inspection{}, domain.Env("inspect", fmt.Sprintf("output duration delta %dms exceeds %dms", delta, tolerance), nil)
 	}
 	if !m.Audio || m.SampleRate != r.Recipe.SampleRate {
-		return domain.Inspection{}, fmt.Errorf("output audio contract mismatch")
+		return domain.Inspection{}, domain.Env("inspect", "output audio contract mismatch", nil)
 	}
 	if r.Recipe.Format == "mp4" && (!m.Video || m.Width != r.Recipe.Width || m.Height != r.Recipe.Height) {
-		return domain.Inspection{}, fmt.Errorf("output video contract mismatch")
+		return domain.Inspection{}, domain.Env("inspect", "output video contract mismatch", nil)
 	}
 	digest, n, err := Digest(path)
 	if err != nil {
-		return domain.Inspection{}, err
+		return domain.Inspection{}, domain.Env("inspect", "artifact digest failed", err)
 	}
 	return domain.Inspection{Media: m, Digest: digest, Bytes: n, DurationDeltaMS: delta}, nil
 }
